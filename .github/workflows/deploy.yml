@@ -1,7 +1,7 @@
 name: CD Pipeline
 
-# Runs on merge/push to main. Tags the release commit and appends CHANGELOG.
-# Production deploy stays on Vercel Git — no duplicate Vercel deploy here.
+# On push to main: create and push an annotated version tag only.
+# Production deploy: Vercel Git (not this workflow).
 
 on:
   push:
@@ -9,10 +9,9 @@ on:
       - main
 
 jobs:
-  tag-and-changelog:
+  tag-release:
     name: CD Pipeline
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
 
     permissions:
       contents: write
@@ -22,67 +21,25 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag release and update CHANGELOG
+      - name: Create and push annotated tag
         env:
           HEAD_MSG: ${{ github.event.head_commit.message }}
           HEAD_SHA: ${{ github.sha }}
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           LAST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1 || true)
           if [ -z "$LAST_TAG" ]; then
             NEW_TAG="v0.1.0"
-            RANGE="${HEAD_SHA}"
-            USE_SINGLE=1
           else
             MAJOR=$(echo "$LAST_TAG" | sed 's/^v//' | cut -d. -f1)
             MINOR=$(echo "$LAST_TAG" | sed 's/^v//' | cut -d. -f2)
             PATCH=$(echo "$LAST_TAG" | sed 's/^v//' | cut -d. -f3)
             PATCH=$((PATCH + 1))
             NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
-            RANGE="${LAST_TAG}..${HEAD_SHA}"
-            USE_SINGLE=0
           fi
 
-          DATE=$(date -u +%Y-%m-%d)
           TITLE=$(echo "$HEAD_MSG" | head -1)
-
-          if [ ! -f CHANGELOG.md ]; then
-            printf '%s\n' \
-              '# Changelog' \
-              '' \
-              'Production releases on `main` are tagged and logged here by the **CD Pipeline**.' \
-              'Deploys are handled by **Vercel Git** integration.' \
-              > CHANGELOG.md
-          fi
-
-          {
-            echo ""
-            echo "## [${NEW_TAG#v}] - ${DATE}"
-            echo ""
-            echo "**${TITLE}**"
-            echo ""
-            if [ "$USE_SINGLE" = "1" ]; then
-              git log -1 --pretty=format:'- %s (`%h`)'
-            else
-              git log "$RANGE" --pretty=format:'- %s (`%h`)' --no-merges
-            fi
-            echo ""
-            echo "- Production: https://ci-cd-demo.vercel.app (Vercel)"
-            echo "- Commit: [\`${HEAD_SHA:0:7}\`](https://github.com/${REPO}/commit/${HEAD_SHA})"
-            echo ""
-          } >> CHANGELOG.md
-
-          git add CHANGELOG.md
-          git commit -m "docs(changelog): release ${NEW_TAG} [skip ci]"
-
           git tag -a "$NEW_TAG" "$HEAD_SHA" -m "Release ${NEW_TAG}: ${TITLE}"
-
-          git push origin main
           git push origin "$NEW_TAG"
