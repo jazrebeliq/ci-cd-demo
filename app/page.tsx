@@ -13,7 +13,7 @@ export default function Home() {
           RebeliQ CI/CD Pipeline demo with Vercel
         </p>
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
-          Welcome, Jazib
+          Welcome, Bob
         </h1>
         <p className="mt-4 text-lg leading-relaxed text-zinc-600 dark:text-zinc-400">
           This app is wired for preview and production deploys through GitHub and
